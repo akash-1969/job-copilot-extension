@@ -722,12 +722,12 @@ function getMarketInsights() {
 }
 
 // Render Expanded HUD Dashboard view
-function renderExpandedCard() {
+function renderExpandedCard(force = false) {
   // Check if sort dropdown is active to avoid closing it
   const sortControl = shadowRoot ? shadowRoot.querySelector('#jc-sort-control') : null;
   const isDropdownActive = sortControl && (shadowRoot.activeElement === sortControl);
-  if (isDropdownActive) {
-    return; // Don't interrupt user interaction
+  if (isDropdownActive && !force) {
+    return; // Don't interrupt user interaction unless forced
   }
 
   // Calculate current state values
@@ -1561,7 +1561,7 @@ function renderExpandedCard() {
       sortControl.addEventListener('change', (e) => {
         sortBy = e.target.value;
         sortJobList();
-        renderExpandedCard();
+        renderExpandedCard(true);
       });
     }
 
