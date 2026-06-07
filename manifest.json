@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "JobCopilot",
   "version": "1.0.0",
-  "description": "Upload your resume once and autofill job application forms with ease.",
+  "description": "Job Discovery, Skill Gap Analysis, and Career Intelligence: Stop opening 50 job postings to find 5 worth applying to.",
   "permissions": [
     "storage"
   ],
