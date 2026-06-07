@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobCopilot Local Testing Sandbox</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 24px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 12px;
+    }
+    .description {
+      color: #64748b;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .form-group {
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #334155;
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+    }
+    button[type="submit"] {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    button[type="submit"]:hover {
+      background: #0284c7;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .test-instruction {
+      background: #e0f2fe;
+      border-left: 4px solid #0ea5e9;
+      padding: 16px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #0369a1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>JobCopilot Testing Sandbox</h1>
+    <p class="description">
+      This page serves as a local test form containing standard and variant field names, placeholders, label arrangements, textareas, and select elements. Use this page to verify the detection overlay and the autofill functionality of the JobCopilot extension.
+    </p>
+
+    <div class="test-instruction">
+      <strong>How to Test Autofill:</strong><br>
+      1. Open the extension popup, go to the Profile Dashboard, upload a resume, or fill out the profile fields manually and save.<br>
+      2. Visit this page. The JobCopilot floating widget should appear in the bottom-right corner.<br>
+      3. Observe the detected fields count in the floating widget.<br>
+      4. Expand the widget and click <strong>"Fill Form"</strong> to populate the test form below.<br>
+      5. Verify that all fields match your saved profile details correctly!
+    </div>
+
+    <div class="test-instruction" style="background: #f0fdf4; border-color: #22c55e; color: #15803d;">
+      <strong>How to Test Match Engine (LinkedIn Simulator):</strong><br>
+      Below is an interactive LinkedIn Jobs page simulation. The JobCopilot extension will detect the simulated cards on the left and description on the right, calculate match percentages, and inject badges automatically! Click cards to change active jobs.
+    </div>
+
+    <!-- LinkedIn Simulator -->
+    <div class="linkedin-simulator" style="display: flex; gap: 20px; margin: 30px 0; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #fff; height: 350px;">
+      <!-- Left Pane: Job List -->
+      <div class="jobs-list-pane" style="width: 40%; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; overflow-y: auto;">
+        <ul class="jobs-search__results-list" style="list-style: none; padding: 0; margin: 0;">
+          <li data-occludable-job-id="101" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">Backend Intern</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Google</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">San Francisco, CA (Remote) • 1 hour ago</div>
+          </li>
+          <li data-occludable-job-id="102" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">Software Engineer Intern</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Apple</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Cupertino, CA (Hybrid) • 2 days ago</div>
+          </li>
+          <li data-occludable-job-id="103" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">ML Intern</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Meta</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Seattle, WA (On-site) • 1 week ago</div>
+          </li>
+          <li data-occludable-job-id="104" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">DevOps Engineer</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Amazon</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Seattle, WA (Remote) • 3 hours ago</div>
+          </li>
+          <li data-occludable-job-id="105" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">HR Executive</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Google</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">San Francisco, CA (On-site) • 1 day ago</div>
+          </li>
+          <li data-occludable-job-id="106" class="jobs-search-results-list__list-item" style="padding: 16px; border-bottom: 1px solid #cbd5e1; cursor: pointer; position: relative;">
+            <a class="job-card-list__title" style="font-weight: 600; color: #0073b1; text-decoration: none; display: block; font-size: 0.95rem; margin-right: 70px;">Operations Analyst</a>
+            <div class="job-card-container__company-name" style="font-size: 0.85rem; margin-top: 4px; color: #334155;">Amazon</div>
+            <div class="job-card-container__metadata-item" style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Seattle, WA (Hybrid) • 2 hours ago</div>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Right Pane: Details View -->
+      <div class="jobs-details-pane" style="width: 60%; padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
+        <div class="job-details-jobs-unified-top-card__primary-description-container">
+          <h1 class="job-details-jobs-unified-top-card__job-title" style="font-size: 1.25rem; margin: 0 0 4px 0; color: #0f172a;">Backend Intern</h1>
+          <div class="job-details-jobs-unified-top-card__company-name" style="font-size: 0.875rem; margin-bottom: 4px; font-weight: 500; color: #334155;">Google</div>
+          <span class="jobs-unified-top-card__workplace-type" style="font-size: 0.8rem; color: #64748b;">San Francisco, CA (Remote)</span>
+        </div>
+        
+        <div id="job-details" style="margin-top: 15px; font-size: 0.85rem; line-height: 1.5; color: #334155;">
+          <h3>About the job</h3>
+          <p>We are looking for a Backend Intern to join our team! In this role, you will work on scaling core services, writing robust code, and learning best practices.</p>
+          <h4>Requirements:</h4>
+          <ul>
+            <li>Strong skills in JavaScript, Node.js, and Java.</li>
+            <li>Familiarity with databases and SQL.</li>
+            <li>Knowledge of Git and Docker.</li>
+            <li>Preferred: experience with AWS.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Simulated descriptions database
+      const descriptions = {
+        "101": {
+          title: "Backend Intern",
+          company: "Google",
+          location: "San Francisco, CA (Remote)",
+          html: `
+            <h3>About the job</h3>
+            <p>We are looking for a Backend Intern to join our team! In this role, you will work on scaling core services, writing robust code, and learning best practices.</p>
+            <h4>Requirements:</h4>
+            <ul>
+              <li>Strong skills in JavaScript, Node.js, and Java.</li>
+              <li>Familiarity with databases and SQL.</li>
+              <li>Knowledge of Git and Docker.</li>
+              <li>Preferred: experience with AWS.</li>
+            </ul>
+          `
+        },
+        "102": {
+          title: "Software Engineer Intern",
+          company: "Apple",
+          location: "Cupertino, CA (Hybrid)",
+          html: `
+            <h3>About the job</h3>
+            <p>Join our software engineering group as an intern! You will build products that change the world.</p>
+            <h4>Requirements:</h4>
+            <ul>
+              <li>Experience with Python, JavaScript, and React.</li>
+              <li>Strong foundation in computer science and algorithms.</li>
+              <li>Knowledge of Git is highly desired.</li>
+            </ul>
+          `
+        },
+        "103": {
+          title: "ML Intern",
+          company: "Meta",
+          location: "Seattle, WA (On-site)",
+          html: `
+            <h3>About the job</h3>
+            <p>We are looking for an ML Intern to join our AI research team.</p>
+            <h4>Requirements:</h4>
+            <ul>
+              <li>Experience with Python and SQL.</li>
+              <li>Knowledge of machine learning, deep learning, and NLP.</li>
+              <li>Familiarity with PyTorch or TensorFlow.</li>
+            </ul>
+          `
+        },
+        "104": {
+          title: "DevOps Engineer",
+          company: "Amazon",
+          location: "Seattle, WA (Remote)",
+          html: `
+            <h3>About the job</h3>
+            <p>We are looking for a DevOps Engineer to join our systems operations team. In this role, you will maintain deployment pipelines, orchestrate containerized applications, and maintain cloud infrastructure.</p>
+          `
+        },
+        "105": {
+          title: "HR Executive",
+          company: "Google",
+          location: "San Francisco, CA (On-site)",
+          html: `
+            <h3>About the job</h3>
+            <p>We are seeking a detail-oriented HR Executive to join our human resources team! You will manage recruiting cycles, coordinate onboarding, and support employee relations.</p>
+            <h4>Requirements:</h4>
+            <ul>
+              <li>Experience with recruiting and talent acquisition.</li>
+              <li>Experience coordinating candidate onboarding.</li>
+              <li>Familiarity with HR policies and employee relations.</li>
+            </ul>
+          `
+        },
+        "106": {
+          title: "Operations Analyst",
+          company: "Amazon",
+          location: "Seattle, WA (Hybrid)",
+          html: `
+            <h3>About the job</h3>
+            <p>Work with operations manager on project coordination, process mapping, and workflow optimization. Must be highly adaptable and detail oriented.</p>
+          `
+        }
+      };
+
+      const listItems = document.querySelectorAll('.jobs-search-results-list__list-item');
+      const detailsTitle = document.querySelector('.job-details-jobs-unified-top-card__job-title');
+      const detailsCompany = document.querySelector('.job-details-jobs-unified-top-card__company-name');
+      const detailsLocation = document.querySelector('.jobs-unified-top-card__workplace-type');
+      const detailsBody = document.querySelector('#job-details');
+
+      listItems.forEach(item => {
+        item.addEventListener('click', () => {
+          // Reset styling
+          listItems.forEach(i => {
+            i.style.background = '#fff';
+            i.classList.remove('jobs-search-results-list__list-item--active');
+          });
+          item.style.background = '#e2e8f0';
+          item.classList.add('jobs-search-results-list__list-item--active');
+          
+          const jobId = item.getAttribute('data-occludable-job-id');
+          const data = descriptions[jobId];
+          if (data) {
+            detailsTitle.textContent = data.title;
+            detailsCompany.textContent = data.company;
+            detailsLocation.textContent = data.location;
+            
+            // Re-render description text
+            detailsBody.innerHTML = data.html;
+            
+            // Append a small hidden tag or force a mutation event that triggers observer
+            const trigger = document.createElement('div');
+            trigger.style.display = 'none';
+            trigger.className = 'jc-mutation-trigger';
+            detailsBody.appendChild(trigger);
+          }
+        });
+      });
+      
+      // Set first item active on load
+      if (listItems.length > 0) {
+        listItems[0].style.background = '#e2e8f0';
+        listItems[0].classList.add('jobs-search-results-list__list-item--active');
+      }
+    </script>
+
+    <h3>Application Form Fields</h3>
+    <form id="application-form" onsubmit="event.preventDefault(); alert('Form submitted! (Simulation)');">
+      
+      <!-- Name Fields (Row) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first-name-input">Given Name</label>
+          <input type="text" id="first-name-input" name="first_name" placeholder="First name" />
+        </div>
+        <div class="form-group">
+          <label>Family Name</label>
+          <!-- Using placeholder and aria-label instead of label for/id -->
+          <input type="text" name="lastname" placeholder="Last name" aria-label="last name" />
+        </div>
+      </div>
+
+      <!-- Single Full Name Field (Alt layout) -->
+      <div class="form-group">
+        <label for="full-name-field">Complete Full Name (Optional Alternate)</label>
+        <input type="text" id="full-name-field" name="candidate_name" placeholder="e.g. Jane Doe" />
+      </div>
+
+      <!-- Contact Fields (Row) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="email-field">Email address</label>
+          <input type="email" id="email-field" name="email" placeholder="you@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="phone-field">Mobile Phone Number</label>
+          <input type="tel" id="phone-field" name="cell_phone" placeholder="Cell number" />
+        </div>
+      </div>
+
+      <!-- Social Links -->
+      <div class="form-group">
+        <label for="linkedin-field">LinkedIn Profile URL</label>
+        <input type="url" id="linkedin-field" name="linkedin_url" placeholder="https://linkedin.com/in/username" />
+      </div>
+
+      <div class="form-group">
+        <label for="github-field">GitHub Repository Link</label>
+        <input type="url" id="github-field" name="github" placeholder="https://github.com/username" />
+      </div>
+
+      <div class="form-group">
+        <label for="portfolio-field">Personal Portfolio / Website</label>
+        <input type="url" id="portfolio-field" name="personal_website" placeholder="https://mywebsite.com" />
+      </div>
+
+      <!-- Education -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="school-field">University / College Name</label>
+          <input type="text" id="school-field" name="school" placeholder="What university did you attend?" />
+        </div>
+        <div class="form-group">
+          <label for="degree-select">Degree Attained</label>
+          <select id="degree-select" name="degree_type">
+            <option value="">Select Degree Type...</option>
+            <option value="Associate">Associate's Degree</option>
+            <option value="Bachelor">Bachelor's Degree (B.S., B.A.)</option>
+            <option value="Master">Master's Degree (M.S., M.A., MBA)</option>
+            <option value="PhD">Doctorate (Ph.D.)</option>
+            <option value="None">High School / Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="major-field">Major / Field of Study</label>
+        <input type="text" id="major-field" name="education_major" placeholder="e.g. Computer Science" />
+      </div>
+
+      <!-- Dropdown Select Test -->
+      <div class="form-group">
+        <label for="skills-select">Primary Programming Domain</label>
+        <select id="skills-select" name="primary_skill_area">
+          <option value="">Select your main domain...</option>
+          <option value="JavaScript">JavaScript / Frontend</option>
+          <option value="Python">Python / Backend</option>
+          <option value="Java">Java / Enterprise</option>
+          <option value="Go">Go / Cloud Systems</option>
+          <option value="Ruby">Ruby / Rails</option>
+        </select>
+      </div>
+
+      <!-- Textarea Skills -->
+      <div class="form-group">
+        <label for="skills-textarea">List of core skills and tools</label>
+        <textarea id="skills-textarea" name="skills_list" placeholder="List your technical skills..." rows="4"></textarea>
+      </div>
+
+      <div style="margin-top: 30px;">
+        <button type="submit">Submit Application</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

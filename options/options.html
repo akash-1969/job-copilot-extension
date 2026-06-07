@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobCopilot Profile Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="options.css">
+  <script src="../lib/pdf.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo-area">
+        <div class="logo-icon">JC</div>
+        <div class="logo-text">
+          <h1>JobCopilot</h1>
+          <span class="badge">MVP v1.0</span>
+        </div>
+      </div>
+      
+      <div class="upload-section">
+        <h2>Resume Upload</h2>
+        <p class="section-desc">Upload a PDF resume to extract and pre-populate your profile details.</p>
+        
+        <div id="drop-zone" class="drop-zone">
+          <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <p class="drop-text">Drag & drop your PDF resume here or</p>
+          <button id="browse-btn" class="btn-browse">Browse Files</button>
+          <input type="file" id="file-input" accept="application/pdf" hidden />
+        </div>
+        <div id="upload-status" class="status-msg"></div>
+      </div>
+      
+      <div class="info-footer">
+        <p>Your data is stored <strong>locally</strong> in your browser (Chrome Storage API). No data is sent to external servers.</p>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="main-header">
+        <div class="header-title">
+          <h2>Candidate Profile</h2>
+          <p>Review and edit your autofill information.</p>
+        </div>
+        <div class="actions">
+          <button id="save-btn" class="btn-primary">Save Profile</button>
+        </div>
+      </header>
+
+      <div class="grid-layout">
+        <!-- Form Section -->
+        <div class="card form-card">
+          <h3>Personal Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="fullName">Full Name</label>
+              <input type="text" id="fullName" placeholder="e.g. Jane Doe" />
+            </div>
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" placeholder="e.g. jane.doe@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone Number</label>
+              <input type="tel" id="phone" placeholder="e.g. +1 (555) 019-2834" />
+            </div>
+          </div>
+
+          <h3>Links & Social Profiles</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="linkedin">LinkedIn URL</label>
+              <input type="url" id="linkedin" placeholder="e.g. https://linkedin.com/in/janedoe" />
+            </div>
+            <div class="form-group">
+              <label for="github">GitHub URL</label>
+              <input type="url" id="github" placeholder="e.g. https://github.com/janedoe" />
+            </div>
+            <div class="form-group">
+              <label for="portfolio">Portfolio/Website URL</label>
+              <input type="url" id="portfolio" placeholder="e.g. https://janedoe.dev" />
+            </div>
+          </div>
+
+          <h3>Education & Skills</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="university">University/College</label>
+              <input type="text" id="university" placeholder="e.g. Stanford University" />
+            </div>
+            <div class="form-group">
+              <label for="degree">Degree/Major</label>
+              <input type="text" id="degree" placeholder="e.g. B.S. in Computer Science" />
+            </div>
+            <div class="form-group full-width">
+              <label for="skills">Skills (Comma-separated)</label>
+              <textarea id="skills" placeholder="e.g. JavaScript, Python, React, Node.js, SQL, Git" rows="3"></textarea>
+            </div>
+          </div>
+
+          <h3>Job Search Preferences</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="targetRoles">Target Job Roles</label>
+              <input type="text" id="targetRoles" placeholder="e.g. Software Engineer, Frontend Engineer" />
+            </div>
+            <div class="form-group">
+              <label for="preferredLocation">Preferred Location</label>
+              <input type="text" id="preferredLocation" placeholder="e.g. San Francisco, CA" />
+            </div>
+            <div class="form-group full-width">
+              <label for="remotePreference">Remote Preference</label>
+              <select id="remotePreference" style="width: 100%;">
+                <option value="open">Open / No Preference</option>
+                <option value="remote">Remote Only</option>
+                <option value="hybrid">Hybrid Only</option>
+                <option value="onsite">On-site Only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Raw Text / Status Section -->
+        <div class="card raw-text-card">
+          <h3>Raw Extracted Resume Text</h3>
+          <p class="card-desc">This is the raw text extracted from the PDF, used to diagnose matching heuristics.</p>
+          <textarea id="rawResumeText" readonly placeholder="Upload a PDF resume to view raw text extraction..."></textarea>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <div id="toast" class="toast">Profile Saved Successfully!</div>
+  
+  <script src="options.js"></script>
+</body>
+</html>

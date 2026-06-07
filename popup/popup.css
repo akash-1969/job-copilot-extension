@@ -1,0 +1,184 @@
+:root {
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --card-bg: rgba(30, 41, 59, 0.7);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --success: #10b981;
+  --warning: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 320px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-main);
+  padding: 1.25rem;
+}
+
+.popup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 0.75rem;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #0ea5e9, #0f766e);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.4);
+}
+
+.logo h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Status Card */
+.status-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  backdrop-filter: blur(10px);
+}
+
+.status-icon-container {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Status variants */
+.status-card.loading {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.status-card.loading .status-icon-container {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.status-card.success {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.status-card.success .status-icon-container {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+}
+
+.status-card.missing {
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.status-card.missing .status-icon-container {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.status-info h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.status-info p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* Actions */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.btn {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(15, 118, 110, 0.3);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.4);
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--card-border);
+  padding-top: 0.75rem;
+}
+
+.secure-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.secure-badge svg {
+  width: 10px;
+  height: 10px;
+}
