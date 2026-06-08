@@ -778,7 +778,6 @@ function renderMinimizedBadge() {
     ${countBadgeHtml}
   `;
 
-  const badge = shadowRoot.querySelector('.jc-minimized-badge');
   badge.addEventListener('click', () => {
     isExpanded = true;
     renderWidget();
