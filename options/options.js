@@ -21,13 +21,43 @@ const formFields = {
   degree: document.getElementById('degree'),
   skills: document.getElementById('skills'),
   targetRoles: document.getElementById('targetRoles'),
+  experienceYears: document.getElementById('experienceYears'),
   preferredLocation: document.getElementById('preferredLocation'),
   remotePreference: document.getElementById('remotePreference'),
   rawResumeText: document.getElementById('rawResumeText')
 };
 
+// KB variables for Options page
+let localSkillsList = [];
+let localSynonyms = {};
+
+async function loadKBForOptions() {
+  try {
+    const fetchJson = async (path) => {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return await res.json();
+    };
+    
+    localSkillsList = await fetchJson('../lib/kb/skills.json');
+    localSynonyms = await fetchJson('../lib/kb/synonyms.json');
+    console.log('[Options KB] Successfully loaded skills and synonyms.');
+  } catch (err) {
+    console.error('[Options KB] Failed to load local files, using defaults.', err);
+    localSkillsList = [
+      'javascript', 'python', 'react', 'node.js', 'typescript', 'java', 'c++', 'c#', 'php', 'ruby', 'go', 'rust', 'swift', 'kotlin', 'sql', 'mongodb', 'postgresql', 'mysql', 'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'git', 'html', 'css', 'vue', 'angular', 'machine learning', 'ui/ux', 'qa'
+    ];
+    localSynonyms = {
+      'reactjs': 'react', 'react.js': 'react', 'nodejs': 'node.js', 'node js': 'node.js', 'node': 'node.js', 'cplusplus': 'c++', 'c plus plus': 'c++', 'csharp': 'c#', 'c sharp': 'c#'
+    };
+  }
+}
+
 // Initialize Options Page
-document.addEventListener('DOMContentLoaded', loadProfile);
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadKBForOptions();
+  loadProfile();
+});
 
 // Save Profile button listener
 saveBtn.addEventListener('click', saveProfile);
@@ -64,7 +94,7 @@ function loadProfile() {
           if (key === 'rawResumeText') {
             formFields[key].value = result.rawResumeText || '';
           } else {
-            formFields[key].value = result.profile[key] || (key === 'remotePreference' ? 'open' : '');
+            formFields[key].value = (result.profile[key] !== undefined && result.profile[key] !== null) ? result.profile[key] : (key === 'remotePreference' ? 'open' : '');
           }
         });
       }
@@ -87,6 +117,7 @@ function saveProfile() {
     degree: formFields.degree.value.trim(),
     skills: formFields.skills.value.trim(),
     targetRoles: formFields.targetRoles.value.trim(),
+    experienceYears: parseInt(formFields.experienceYears.value, 10) || 0,
     preferredLocation: formFields.preferredLocation.value.trim(),
     remotePreference: formFields.remotePreference.value
   };
@@ -124,52 +155,57 @@ function reconstructLinesFromPdfPage(textContent) {
   const items = textContent.items;
   if (!items || items.length === 0) return '';
   
-  // Sort items primarily by Y-coordinate descending (top of page to bottom),
-  // and secondarily by X-coordinate ascending (left to right).
-  // Use a threshold of 6 units for matching items on the same line.
-  const threshold = 6;
-  const activeItems = items.filter(it => it.str && it.str.trim().length > 0);
-  
-  activeItems.sort((a, b) => {
-    const yA = a.transform[5];
-    const yB = b.transform[5];
-    const xA = a.transform[4];
-    const xB = b.transform[4];
+  try {
+    // Sort items primarily by Y-coordinate descending (top of page to bottom),
+    // and secondarily by X-coordinate ascending (left to right).
+    // Use a threshold of 6 units for matching items on the same line.
+    const threshold = 6;
+    const activeItems = items.filter(it => it.str && it.str.trim().length > 0);
     
-    const yDiff = yB - yA;
-    if (Math.abs(yDiff) < threshold) {
-      return xA - xB;
+    activeItems.sort((a, b) => {
+      const yA = a.transform[5];
+      const yB = b.transform[5];
+      const xA = a.transform[4];
+      const xB = b.transform[4];
+      
+      const yDiff = yB - yA;
+      if (Math.abs(yDiff) < threshold) {
+        return xA - xB;
+      }
+      return yDiff;
+    });
+    
+    const lines = [];
+    let currentY = null;
+    let currentLineItems = [];
+    
+    for (const item of activeItems) {
+      const y = item.transform[5];
+      
+      if (currentY === null) {
+        currentY = y;
+        currentLineItems.push(item);
+      } else if (Math.abs(currentY - y) < threshold) {
+        currentLineItems.push(item);
+      } else {
+        currentLineItems.sort((a, b) => a.transform[4] - b.transform[4]);
+        lines.push(currentLineItems.map(it => it.str).join(' '));
+        
+        currentY = y;
+        currentLineItems = [item];
+      }
     }
-    return yDiff;
-  });
-  
-  const lines = [];
-  let currentY = null;
-  let currentLineItems = [];
-  
-  for (const item of activeItems) {
-    const y = item.transform[5];
     
-    if (currentY === null) {
-      currentY = y;
-      currentLineItems.push(item);
-    } else if (Math.abs(currentY - y) < threshold) {
-      currentLineItems.push(item);
-    } else {
+    if (currentLineItems.length > 0) {
       currentLineItems.sort((a, b) => a.transform[4] - b.transform[4]);
       lines.push(currentLineItems.map(it => it.str).join(' '));
-      
-      currentY = y;
-      currentLineItems = [item];
     }
+    
+    return lines.join('\n');
+  } catch (err) {
+    console.warn('[PDF Parser] Spatial reconstruction failed, falling back to sequential join.', err);
+    return items.map(it => it.str || '').join(' ');
   }
-  
-  if (currentLineItems.length > 0) {
-    currentLineItems.sort((a, b) => a.transform[4] - b.transform[4]);
-    lines.push(currentLineItems.map(it => it.str).join(' '));
-  }
-  
-  return lines.join('\n');
 }
 
 // Process PDF File
@@ -366,36 +402,155 @@ function parseResumeText(text) {
   formFields.university.value = university.trim();
   formFields.degree.value = degree.trim();
 
-  // 7. Skills Heuristic
-  const commonSkills = [
-    'JavaScript', 'Python', 'React', 'HTML', 'CSS', 'Node.js', 'TypeScript', 'Java', 'C++',
-    'SQL', 'Git', 'Docker', 'AWS', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Go', 'Rust',
-    'Kubernetes', 'Project Management', 'Data Analysis', 'Machine Learning', 'AI', 'UI/UX'
-  ];
-  
-  let detectedSkills = [];
-  const cleanLines = lines.map(line => line.replace(/\s+/g, ' ').trim());
-  for (let i = 0; i < cleanLines.length; i++) {
-    const line = cleanLines[i];
-    if (/^(skills|technical skills|languages|technologies|proficiencies|core competencies)/i.test(line)) {
-      const segment = cleanLines.slice(i, i + 3).join(', ');
-      let cleanSeg = segment.replace(/skills|technical|languages|technologies|proficiencies|core competencies/ig, '');
-      cleanSeg = cleanSeg.replace(/^[:\s\-–—]+/, '').trim();
-      if (cleanSeg.length > 5) {
-        detectedSkills.push(cleanSeg);
-        break;
-      }
-    }
-  }
+  // 7. Skills Heuristic: Extract from entire resume and phrases, then normalize
+  const detected = new Set();
+  const lowerText = text.toLowerCase();
+  const skillsList = localSkillsList || [];
+  const synonyms = localSynonyms || {};
 
-  const matchedCommon = commonSkills.filter(skill => {
-    const wordRegex = new RegExp('\\b' + skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
-    return wordRegex.test(text);
+  const getNormalized = (s) => {
+    const clean = s.trim().toLowerCase();
+    if (synonyms[clean]) return synonyms[clean].toLowerCase();
+    const noSpaces = clean.replace(/\s+/g, '');
+    if (noSpaces === 'c++' || noSpaces === 'cplusplus' || noSpaces === 'cpp') return 'cpp';
+    if (noSpaces === 'c#' || noSpaces === 'csharp') return 'c#';
+    if (noSpaces === 'reactjs' || noSpaces === 'react.js' || noSpaces === 'react') return 'react';
+    if (noSpaces === 'nodejs' || noSpaces === 'node.js' || noSpaces === 'node') return 'nodejs';
+    if (noSpaces === 'dotnet' || noSpaces === '.net') return '.net';
+    if (noSpaces === 'tensorflow' || noSpaces === 'tensor-flow') return 'tensorflow';
+    if (noSpaces === 'pytorch' || noSpaces === 'py-torch') return 'pytorch';
+    if (noSpaces === 'golang') return 'go';
+    if (noSpaces === 'k8s') return 'kubernetes';
+    if (noSpaces === 'amazonwebservices' || noSpaces === 'aws') return 'aws';
+    return clean;
+  };
+
+  // 1. Scan entire resume for any known skill in skillsList
+  skillsList.forEach(skill => {
+    const escaped = skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    let regexStr;
+    if (skill === 'c++') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])c\\s*\\+\\s*\\+(?:$|[^a-zA-Z0-9\\+#])';
+    } else if (skill === 'c#') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])c\\s*\\#(?:$|[^a-zA-Z0-9\\+#])';
+    } else if (skill === '.net') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])\\.\\s*net(?:$|[^a-zA-Z0-9\\+#])';
+    } else {
+      regexStr = '\\b' + escaped + '\\b';
+    }
+    
+    if (new RegExp(regexStr, 'i').test(lowerText)) {
+      detected.add(getNormalized(skill));
+    }
   });
 
-  if (detectedSkills.length > 0) {
-    formFields.skills.value = detectedSkills.join(', ');
-  } else {
-    formFields.skills.value = matchedCommon.join(', ');
+  // 2. Scan synonyms list on entire resume
+  Object.keys(synonyms).forEach(syn => {
+    const escaped = syn.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    let regexStr;
+    if (syn === 'c++') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])c\\s*\\+\\s*\\+(?:$|[^a-zA-Z0-9\\+#])';
+    } else if (syn === 'c#') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])c\\s*\\#(?:$|[^a-zA-Z0-9\\+#])';
+    } else if (syn === '.net') {
+      regexStr = '(?:^|[^a-zA-Z0-9\\+#])\\.\\s*net(?:$|[^a-zA-Z0-9\\+#])';
+    } else {
+      regexStr = '\\b' + escaped + '\\b';
+    }
+    
+    if (new RegExp(regexStr, 'i').test(lowerText)) {
+      detected.add(getNormalized(synonyms[syn]));
+    }
+  });
+
+  // 3. Scan for skill context phrases (e.g. "Proficient in React, Node, and Python")
+  const phrasesRegex = /(?:proficient in|experienced with|worked with|built projects using|familiar with|knowledge of)\s+([^.\n]+)/gi;
+  let match;
+  while ((match = phrasesRegex.exec(text)) !== null) {
+    const skillsBlob = match[1];
+    const splitSkills = skillsBlob.split(/[,;\t]|\s+and\s+|\s+or\s+|\s+&\s+/gi);
+    splitSkills.forEach(rawSkill => {
+      let cleanSkill = rawSkill.trim().replace(/^[\s\-–—\*\•]+|[\s\-–—\*\•]+$/g, '').trim();
+      
+      // Strip leading conjunctions/prepositions
+      cleanSkill = cleanSkill.replace(/^(and|or|with|in|of|a|an|the)\s+/i, '').trim();
+      
+      if (cleanSkill.length > 1 && cleanSkill.length < 30) {
+        const words = cleanSkill.split(/\s+/);
+        if (words.length > 3) return; // Skills are at most 3 words
+        
+        // Filter out common filler words
+        const cleanLower = cleanSkill.toLowerCase();
+        const fillerWords = ['successfully', 'completed', 'over', 'questions', 'encompassing', 'broad', 'leetcode', 'project', 'experience', 'client', 'team', 'work', 'using', 'built', 'worked', 'proficient', 'familiar', 'knowledge', 'experienced', 'programming', 'program', 'questions'];
+        const hasFiller = fillerWords.some(w => cleanLower.includes(w));
+        if (hasFiller) return;
+        
+        let normalized = getNormalized(cleanLower);
+        detected.add(normalized);
+      }
+    });
   }
+
+  // 4. Map standard casing from skillsList
+  const finalSkills = Array.from(detected).map(skill => {
+    if (skill === 'cpp') return 'C++';
+    if (skill === 'nodejs') return 'Node.js';
+    if (skill === 'react') return 'React';
+    if (skill === 'javascript') return 'JavaScript';
+    if (skill === 'typescript') return 'TypeScript';
+    if (skill === 'c#') return 'C#';
+    if (skill === '.net') return '.NET';
+    if (skill === 'aws') return 'AWS';
+    if (skill === 'gcp') return 'GCP';
+    if (skill === 'html') return 'HTML';
+    if (skill === 'css') return 'CSS';
+    if (skill === 'sql') return 'SQL';
+    if (skill === 'nosql') return 'NoSQL';
+    if (skill === 'ci/cd') return 'CI/CD';
+    if (skill === 'git') return 'Git';
+    if (skill === 'ui/ux') return 'UI/UX';
+    if (skill === 'qa') return 'QA';
+    if (skill === 'jira') return 'Jira';
+
+    const official = skillsList.find(s => s.toLowerCase() === skill.toLowerCase());
+    if (official) {
+      return official.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    return skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  });
+
+  const deduplicated = Array.from(new Set(finalSkills)).filter(s => s.length > 0);
+  formFields.skills.value = deduplicated.join(', ');
+
+  // 8. Experience Years Heuristic
+  let experienceYears = 0;
+  // Look for patterns like "5+ years of experience", "3 years experience", "10+ yrs of exp", etc.
+  const expRegex = /(?:^|\s)(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)\b/i;
+  const expMatch = text.match(expRegex);
+  if (expMatch) {
+    experienceYears = parseInt(expMatch[1], 10);
+  } else {
+    // Fall back to scanning date ranges in work history sections to estimate total duration
+    const rangeRegex = /\b(19\d{2}|20[0-2]\d)\b\s*(?:-|–|—|to)\s*\b(19\d{2}|20[0-2]\d|present|current|now)\b/gi;
+    let rangeMatch;
+    let totalYears = 0;
+    const currentYear = new Date().getFullYear();
+    while ((rangeMatch = rangeRegex.exec(text)) !== null) {
+      const startYear = parseInt(rangeMatch[1], 10);
+      let endYearStr = rangeMatch[2].toLowerCase();
+      let endYear = currentYear;
+      if (/present|current|now/.test(endYearStr)) {
+        endYear = currentYear;
+      } else {
+        endYear = parseInt(endYearStr, 10);
+      }
+      if (endYear >= startYear) {
+        totalYears += (endYear - startYear);
+      }
+    }
+    if (totalYears > 0) {
+      experienceYears = Math.min(totalYears, 30);
+    }
+  }
+  formFields.experienceYears.value = experienceYears;
 }

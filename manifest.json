@@ -35,7 +35,11 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "content/content.css"
+        "content/content.css",
+        "lib/kb/skills.json",
+        "lib/kb/synonyms.json",
+        "lib/kb/roleMappings.json",
+        "lib/kb/inferredSkills.json"
       ],
       "matches": [
         "<all_urls>"

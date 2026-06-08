@@ -1,0 +1,70 @@
+{
+  "backend": [
+    "java", "spring boot", "node.js", "python", "go", "rust", "sql", "postgresql", "mysql", "mongodb", 
+    "docker", "kubernetes", "aws", "rest api", "microservices", "graphql", "git", "ci/cd"
+  ],
+  "frontend": [
+    "javascript", "typescript", "react", "angular", "vue", "next.js", "html", "css", "tailwind css", "bootstrap", 
+    "sass", "redux", "webpack", "vite", "graphql", "rest api", "git"
+  ],
+  "fullstack": [
+    "javascript", "typescript", "react", "node.js", "html", "css", "sql", "postgresql", "mysql", "mongodb", 
+    "git", "rest api", "docker", "aws"
+  ],
+  "devops": [
+    "linux", "unix", "docker", "kubernetes", "ci/cd", "terraform", "jenkins", "git", "aws", "azure", "gcp", 
+    "bash", "shell scripting", "ansible", "python", "prometheus", "grafana"
+  ],
+  "machine learning": [
+    "python", "tensorflow", "pytorch", "pandas", "numpy", "scikit-learn", "keras", "machine learning", 
+    "deep learning", "nlp", "computer vision", "sql", "data pipelines", "spark"
+  ],
+  "data engineer": [
+    "python", "sql", "spark", "hadoop", "postgresql", "data pipelines", "etl", "data warehousing", "aws", 
+    "gcp", "snowflake", "scala", "hive", "kafka"
+  ],
+  "data scientist": [
+    "python", "sql", "machine learning", "statistics", "data analysis", "pandas", "numpy", "scikit-learn", 
+    "tableau", "r"
+  ],
+  "qa": [
+    "automated testing", "manual testing", "selenium", "cypress", "jest", "playwright", "appium", "qa", "quality assurance", 
+    "test automation", "python", "javascript", "java", "git", "jira"
+  ],
+  "cybersecurity": [
+    "cybersecurity", "network security", "penetration testing", "cryptography", "linux", "security auditing", 
+    "wireshark", "aws", "firewalls", "owasp"
+  ],
+  "product manager": [
+    "product management", "agile", "scrum", "jira", "confluence", "roadmapping", "wireframing", "data analysis", 
+    "product strategy"
+  ],
+  "designer": [
+    "ui/ux", "figma", "adobe xd", "user research", "wireframing", "prototyping", "photoshop", "illustrator", 
+    "css", "html"
+  ],
+  "mobile": [
+    "swift", "kotlin", "java", "objective-c", "dart", "flutter", "react native", "ios", "android", "git", "rest api"
+  ],
+  "software": [
+    "javascript", "python", "java", "c++", "git", "sql", "rest api", "docker", "html", "css"
+  ],
+  "operations analyst": [
+    "data analysis", "reporting", "process improvement", "project management", "sql", "excel", "tableau", "communication"
+  ],
+  "hr executive": [
+    "recruiting", "talent acquisition", "onboarding", "employee relations", "hr policies", "conflict resolution", "hris", "communication"
+  ],
+  "business development": [
+    "sales", "negotiation", "lead generation", "crm", "cold calling", "account management", "business development", "communication"
+  ],
+  "retail manager": [
+    "store operations", "customer service", "inventory management", "staff scheduling", "sales", "team leadership", "communication"
+  ],
+  "customer success": [
+    "customer support", "relationship management", "communication", "crm", "troubleshooting", "client retention"
+  ],
+  "campus ambassador": [
+    "communication", "social media", "event planning", "relationship management"
+  ]
+}

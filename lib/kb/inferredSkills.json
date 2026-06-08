@@ -1,0 +1,17 @@
+{
+  "rest api": ["api design", "backend development"],
+  "rest apis": ["api design", "backend development"],
+  "restful api": ["api design", "backend development"],
+  "restful apis": ["api design", "backend development"],
+  "microservice": ["docker", "distributed systems", "backend development"],
+  "microservices": ["docker", "distributed systems", "backend development"],
+  "ci/cd": ["devops", "github actions", "deployment pipelines"],
+  "cicd": ["devops", "github actions", "deployment pipelines"],
+  "continuous integration": ["devops", "github actions", "deployment pipelines"],
+  "continuous deployment": ["devops", "github actions", "deployment pipelines"],
+  "cloud infrastructure": ["aws", "azure", "gcp"],
+  "deep learning": ["tensorflow", "pytorch"],
+  "frontend development": ["react", "angular", "vue"],
+  "backend development": ["node.js", "express", "rest api", "sql"],
+  "machine learning": ["scikit-learn", "tensorflow", "pytorch"]
+}

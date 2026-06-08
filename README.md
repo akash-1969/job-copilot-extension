@@ -174,6 +174,11 @@ JobCopilot is engineered with a decoupled, event-driven architecture, keeping sc
 *   **Job Understanding Layer ([jobUnderstanding.js](lib/jobUnderstanding.js))**: Classifies job titles into 13 software and operations disciplines (Backend, Frontend, Fullstack, DevOps, ML, etc.) and extracts/infers technical requirements using local dictionaries.
 *   **Local Match Engine ([matchEngine.js](lib/matchEngine.js))**: Implements a weighted 100-point scoring algorithm:
     $$\text{Score} = \text{Skill Match (40\%)} + \text{Role Alignment (30\%)} + \text{Location Fit (15\%)} + \text{Remote Preference (15\%)}$$
+*   **Extensible Local Knowledge Base ([lib/kb/](lib/kb/))**: A modular dataset of local JSON dictionary files that drives synonym normalization, role-based expectations, and responsibility-based skill inference client-side:
+    *   [skills.json](lib/kb/skills.json): Unified list of all recognized technical and non-technical skills.
+    *   [synonyms.json](lib/kb/synonyms.json): Maps spelling variations and aliases (e.g., `ReactJS` → `React`, `Node` → `Node.js`) to normalized skill terms.
+    *   [roleMappings.json](lib/kb/roleMappings.json): Maps core disciplines (e.g., frontend, backend, devops) to their standard expected skills.
+    *   [inferredSkills.json](lib/kb/inferredSkills.json): Maps responsibility phrases and concepts (e.g., `REST APIs` → `API Design`, `Backend Development`) to actual required skills.
 *   **Shadow DOM Isolation ([content.js](content/content.js))**: Appends a `#jc-widget-container` to the host page and attaches an open Shadow DOM root. This guarantees that JobCopilot's UI rules cannot be overwritten by the parent website's stylesheet.
 *   **Absolute Sizing Reset ([content.css](content/content.css))**: Relies entirely on absolute pixel (`px`) definitions and starts with `:host { all: initial; }` to strip out inherited parent site scales.
 

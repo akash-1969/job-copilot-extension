@@ -6,6 +6,47 @@ let detectedJobs = [];      // Scraped job card listings
 let activeJobDetails = null; // Scraped active job details
 let userProfile = null;      // Stored candidate profile
 
+// Knowledge Base Globals
+window.JOB_COPILOT_SKILLS = [];
+window.JOB_COPILOT_SYNONYMS = {};
+window.JOB_COPILOT_ROLE_MAPPINGS = {};
+window.JOB_COPILOT_INFERRED_SKILLS = {};
+window.isKbLoaded = false;
+
+async function loadKnowledgeBase() {
+  if (window.isKbLoaded) return;
+  
+  try {
+    const fetchJson = async (fileName) => {
+      const url = chrome.runtime.getURL(fileName);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to load ${fileName}: ${res.statusText}`);
+      return await res.json();
+    };
+
+    const [skills, synonyms, roleMappings, inferredSkills] = await Promise.all([
+      fetchJson('lib/kb/skills.json'),
+      fetchJson('lib/kb/synonyms.json'),
+      fetchJson('lib/kb/roleMappings.json'),
+      fetchJson('lib/kb/inferredSkills.json')
+    ]);
+
+    window.JOB_COPILOT_SKILLS = skills;
+    window.JOB_COPILOT_SYNONYMS = synonyms;
+    window.JOB_COPILOT_ROLE_MAPPINGS = roleMappings;
+    window.JOB_COPILOT_INFERRED_SKILLS = inferredSkills;
+    window.isKbLoaded = true;
+    console.log('[JobCopilot KB] Successfully loaded 4 local knowledge base databases.');
+  } catch (err) {
+    console.error('[JobCopilot KB] Error loading knowledge base, using defaults.', err);
+    window.JOB_COPILOT_SKILLS = [];
+    window.JOB_COPILOT_SYNONYMS = {};
+    window.JOB_COPILOT_ROLE_MAPPINGS = {};
+    window.JOB_COPILOT_INFERRED_SKILLS = {};
+    window.isKbLoaded = true;
+  }
+}
+
 let isExpanded = false;
 let activeTab = 'active';    // 'active' (details), 'list' (listings), or 'autofill' (form)
 let sortBy = 'score';        // 'score', 'remote', 'location', 'date'
@@ -147,6 +188,9 @@ async function initJobCopilot() {
     return;
   }
 
+  // Load the local knowledge base databases
+  await loadKnowledgeBase();
+
   // Detect if matching applies (Multi-site check)
   const activeAdapter = window.SiteAdapter ? window.SiteAdapter.getAdapter() : null;
   isMatchMode = !!activeAdapter;
@@ -172,11 +216,66 @@ async function initJobCopilot() {
 
   // Listen for click events on the page to intercept job card clicks for immediate scoring feedback
   document.addEventListener('click', (e) => {
+    // Skip if click is inside our widget container
+    if (widgetContainer && (widgetContainer === e.target || widgetContainer.contains(e.target))) {
+      return;
+    }
+
+    // Intercept redirects on Unstop
+    const isUnstop = window.location.hostname.toLowerCase().includes('unstop.com');
+    if (isUnstop) {
+      const card = e.target.closest('app-opportunity-card, .opportunity_card, .opportunity-card, [class*="opportunity-card"], [class*="opportunity_card"]');
+      if (card) {
+        // Find corresponding job in detectedJobs
+        const job = detectedJobs.find(j => j.element === card || card.contains(j.element) || (j.element && j.element.contains(card)));
+        if (job) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Clean up previous active card style
+          const prevActive = document.querySelector('[data-jc-active="true"]');
+          if (prevActive) {
+            prevActive.removeAttribute('data-jc-active');
+            prevActive.style.outline = '';
+            prevActive.style.boxShadow = '';
+          }
+          // Highlight current card
+          card.setAttribute('data-jc-active', 'true');
+          card.style.outline = '2px solid #0d9488';
+          card.style.boxShadow = '0 0 12px rgba(13, 148, 136, 0.3)';
+          
+          activeJobDetails = {
+            jobId: job.jobId,
+            title: job.title,
+            company: job.company,
+            locationText: job.locationText,
+            description: '',
+            isEstimatedPreview: true,
+            opportunityUrl: job.opportunityUrl || `https://unstop.com/opportunities/${job.jobId}`
+          };
+          
+          const match = window.JobCopilotMatchEngine.calculateFullMatch(activeJobDetails, userProfile);
+          match.isEstimated = false;
+          match.jobId = job.jobId;
+          match.title = job.title;
+          match.company = job.company;
+          match.locationText = job.locationText;
+          match.descriptionLength = 0;
+          jobMatchCache.set(job.jobId, match);
+          
+          activeTab = 'active';
+          isExpanded = true;
+          renderWidget();
+          return;
+        }
+      }
+    }
+
     const card = e.target.closest('li[data-occludable-job-id], .jobs-search-results-list__list-item, .job-card-container, .job_seen_beacon, td.resultContent, .slider_container');
     if (card) {
       triggerAnalysisWithRetry();
     }
-  });
+  }, true); // Use capture phase to intercept card clicks and prevent default navigation on Unstop
 }
 
 // Relaxed title matching helper to handle ellipsis truncation and formatting variations
@@ -271,6 +370,11 @@ function getStoredProfile() {
 
 // Core page scanning and match computing logic
 function runPageAnalysis() {
+  if (!window.isKbLoaded) {
+    console.log('[JobCopilot] runPageAnalysis skipped: Knowledge Base is still loading.');
+    return;
+  }
+
   // 1. Scan for form fields regardless of domain (critical for Easy Apply modals / standard forms)
   detectedFields = scanFormFields();
 
@@ -295,8 +399,16 @@ function runPageAnalysis() {
     const scrapedCards = activeAdapter.scrapeVisibleCardJobs ? activeAdapter.scrapeVisibleCardJobs() : [];
     
     // 3. Scrape active detail view
-    const activeDetails = activeAdapter.scrapeActiveJobDetails ? activeAdapter.scrapeActiveJobDetails() : null;
-    const activeCardTitle = activeAdapter.scrapeActiveCardTitle ? activeAdapter.scrapeActiveCardTitle() : '';
+    const isUnstop = window.location.hostname.toLowerCase().includes('unstop.com');
+    const showingPreview = activeJobDetails && activeJobDetails.isEstimatedPreview;
+
+    let activeDetails = null;
+    let activeCardTitle = '';
+
+    if (!isUnstop || !showingPreview) {
+      activeDetails = activeAdapter.scrapeActiveJobDetails ? activeAdapter.scrapeActiveJobDetails() : null;
+      activeCardTitle = activeAdapter.scrapeActiveCardTitle ? activeAdapter.scrapeActiveCardTitle() : '';
+    }
     
     // Check if the scraped details match the active card's title (using robust relaxed helper)
     const detailsAreOutdated = activeDetails && activeCardTitle && !isTitleMatch(activeCardTitle, activeDetails.title);
@@ -574,6 +686,15 @@ function removeWidget() {
   }
 }
 
+function ensureStylesheet() {
+  if (shadowRoot && !shadowRoot.querySelector('link[href*="content.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = chrome.runtime.getURL('content/content.css');
+    shadowRoot.appendChild(link);
+  }
+}
+
 // Render widget DOM
 function renderWidget() {
   if (!widgetContainer) {
@@ -638,12 +759,23 @@ function renderMinimizedBadge() {
     }
   }
 
-  shadowRoot.innerHTML = `
-    <link rel="stylesheet" href="${chrome.runtime.getURL('content/content.css')}">
-    <div class="jc-minimized-badge" title="Open JobCopilot HUD">
-      <div class="jc-minimized-icon-circle">JC</div>
-      ${countBadgeHtml}
-    </div>
+  ensureStylesheet();
+
+  // Remove card container if rendering minimized badge
+  const oldCard = shadowRoot.querySelector('.jc-card');
+  if (oldCard) oldCard.remove();
+
+  let badge = shadowRoot.querySelector('.jc-minimized-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'jc-minimized-badge';
+    badge.title = 'Open JobCopilot HUD';
+    shadowRoot.appendChild(badge);
+  }
+
+  badge.innerHTML = `
+    <div class="jc-minimized-icon-circle">JC</div>
+    ${countBadgeHtml}
   `;
 
   const badge = shadowRoot.querySelector('.jc-minimized-badge');
@@ -654,6 +786,32 @@ function renderMinimizedBadge() {
   });
 }
 
+function getSkillDisplay(skill) {
+  if (!skill) return '';
+  const clean = skill.trim().toLowerCase();
+  if (clean === 'cpp') return 'C++';
+  if (clean === 'nodejs') return 'Node.js';
+  if (clean === 'react') return 'React';
+  if (clean === 'javascript') return 'JavaScript';
+  if (clean === 'typescript') return 'TypeScript';
+  if (clean === 'c#') return 'C#';
+  if (clean === '.net') return '.NET';
+  if (clean === 'aws') return 'AWS';
+  if (clean === 'gcp') return 'GCP';
+  if (clean === 'html') return 'HTML';
+  if (clean === 'css') return 'CSS';
+  if (clean === 'sql') return 'SQL';
+  if (clean === 'nosql') return 'NoSQL';
+  if (clean === 'ci/cd') return 'CI/CD';
+  if (clean === 'git') return 'Git';
+  if (clean === 'ui/ux') return 'UI/UX';
+  if (clean === 'qa') return 'QA';
+  if (clean === 'jira') return 'Jira';
+  
+  // Title case fallback
+  return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 function generateBulletInsights(activeMatch) {
   const matches = [];
   const missing = [];
@@ -661,17 +819,17 @@ function generateBulletInsights(activeMatch) {
   // 1. Check matched skills (up to 3)
   const explicitMatched = activeMatch.explicitMatched || [];
   explicitMatched.slice(0, 3).forEach(skill => {
-    matches.push(`${skill.toUpperCase()} found`);
+    matches.push(`${getSkillDisplay(skill)} found`);
   });
   if (matches.length < 3) {
     const inferredMatched = activeMatch.inferredMatched || [];
     inferredMatched.slice(0, 3 - matches.length).forEach(skill => {
-      matches.push(`${skill.toUpperCase()} found (implied)`);
+      matches.push(`${getSkillDisplay(skill)} found (implied)`);
     });
   }
 
   // 2. Check role match
-  if (activeMatch.breakdown.role.score >= 25) {
+  if (activeMatch.breakdown.role.score >= 20) {
     const roleName = activeMatch.roleDetected ? activeMatch.roleDetected : 'role';
     matches.push(`${roleName.charAt(0).toUpperCase() + roleName.slice(1)} role match`);
   } else {
@@ -692,16 +850,31 @@ function generateBulletInsights(activeMatch) {
     missing.push(`Location preference mismatch`);
   }
 
+  // 4b. Check experience match
+  const expScore = activeMatch.breakdown.experience ? activeMatch.breakdown.experience.score : 15;
+  const requiredExp = activeMatch.requiredExperience || 0;
+  const candidateExp = activeMatch.candidateExperience || 0;
+  
+  if (expScore === 15) {
+    if (requiredExp > 0) {
+      matches.push(`Experience requirement met (${candidateExp} yrs)`);
+    } else {
+      matches.push(`Experience preference match`);
+    }
+  } else {
+    missing.push(`Experience gap (${requiredExp} yrs required, you have ${candidateExp} yrs)`);
+  }
+
   // 5. Check missing skills (up to 3)
   const explicitMissing = activeMatch.explicitMissing || [];
   const skillMissingBullets = [];
   explicitMissing.slice(0, 3).forEach(skill => {
-    skillMissingBullets.push(skill.toUpperCase());
+    skillMissingBullets.push(getSkillDisplay(skill));
   });
   if (skillMissingBullets.length < 3) {
     const inferredMissing = activeMatch.inferredMissing || [];
     inferredMissing.slice(0, 3 - skillMissingBullets.length).forEach(skill => {
-      skillMissingBullets.push(`${skill.toUpperCase()} (implied)`);
+      skillMissingBullets.push(`${getSkillDisplay(skill)} (implied)`);
     });
   }
 
@@ -765,8 +938,8 @@ function renderExpandedCard(force = false) {
   };
 
   // Preserve scroll position
-  const bodyEl = shadowRoot ? shadowRoot.querySelector('.jc-body') : null;
-  const scrollTop = bodyEl ? bodyEl.scrollTop : 0;
+  const tabContentEl = shadowRoot ? shadowRoot.querySelector('.jc-tab-content') : null;
+  const scrollTop = tabContentEl ? tabContentEl.scrollTop : 0;
   // 1. Build tabs header html
   let tabsHtml = '';
   if (isMatchMode) {
@@ -814,7 +987,8 @@ function renderExpandedCard(force = false) {
       
       const makeTag = (skill, isMatched) => {
         const cls = isMatched ? 'jc-skill-tag jc-skill-matched' : 'jc-skill-tag jc-skill-missing';
-        return `<span class="${cls}">${skill.toUpperCase()}</span>`;
+        const display = getSkillDisplay(skill);
+        return `<span class="${cls}">${display}</span>`;
       };
 
       const explicitMatchedTags = (activeMatch.explicitMatched || activeMatch.matchedSkills || []).length > 0
@@ -863,15 +1037,45 @@ function renderExpandedCard(force = false) {
       const matchedBulletsHtml = bullets.matches.map(m => `<li><span class="jc-bullet-check">✓</span> ${m}</li>`).join('');
       const missingBulletsHtml = bullets.missing.map(m => `<li><span class="jc-bullet-cross">✗</span> ${m}</li>`).join('');
 
+      let applyBtnHtml = '';
+      if (activeJobDetails && activeJobDetails.isEstimatedPreview) {
+        applyBtnHtml = `
+          <div style="margin: 12px 0 4px 0; width: 100%; display: flex; justify-content: center;">
+            <button class="jc-btn jc-btn-fill jc-apply-btn" data-url="${activeJobDetails.opportunityUrl || ''}" style="width: 100%; padding: 10px; font-weight: 700; background: linear-gradient(135deg, #0d9488, #0ea5e9); border: none; border-radius: 8px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+              <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Apply / Go to Opportunity Page
+            </button>
+          </div>
+        `;
+      }
+
       bodyHtml = `
         <div class="jc-score-header">
           <div class="jc-score-circle ${levelClass}">${activeMatch.score}%</div>
           <div class="jc-score-title">${activeMatch.title}</div>
           <div class="jc-score-subtitle">${activeMatch.company}</div>
           ${metaBadgesHtml}
+          ${applyBtnHtml}
         </div>
         ${aiAlertHtml}
-        <div class="jc-body" style="max-height:380px; gap:14px;">
+        <div class="jc-body" style="gap:14px;">
+          <!-- Experience info bar -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30, 41, 59, 0.4); border:1px solid rgba(255,255,255,0.06); padding:8px 12px; border-radius:10px; font-size:13px; margin-top:2px;">
+            <span style="color:#94a3b8; display:flex; align-items:center; gap:6px;">
+              <svg style="width:14px; height:14px; color:#38bdf8;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Required Experience:
+            </span>
+            <strong>
+              ${activeMatch.requiredExperience} yrs 
+              <span style="font-weight:normal; color:#64748b; margin-left:4px; margin-right:4px;">vs</span> 
+              You: ${activeMatch.candidateExperience} yrs
+            </strong>
+          </div>
+
           <!-- Bullet Insights Grid (Why this match vs Missing) -->
           <div class="jc-insights-dashboard-grid">
             <div class="jc-insights-card" style="margin-bottom:0; background:rgba(30, 41, 59, 0.2); border-left:3px solid #0d9488; padding:12px 14px;">
@@ -920,12 +1124,16 @@ function renderExpandedCard(force = false) {
             <summary class="jc-collapsible-summary">Detailed Match Breakdown</summary>
             <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px;">
               <div class="jc-breakdown-row" style="margin-bottom:0; padding:6px 10px; font-size:13px;">
-                <span>Skill Match (40 pts)</span>
-                <strong>${activeMatch.breakdown.skills.score} / 40 (${activeMatch.breakdown.skills.pct}%)</strong>
+                <span>Skill Match (30 pts)</span>
+                <strong>${activeMatch.breakdown.skills.score} / 30 (${activeMatch.breakdown.skills.pct}%)</strong>
               </div>
               <div class="jc-breakdown-row" style="margin-bottom:0; padding:6px 10px; font-size:13px;">
-                <span>Role Match (30 pts)</span>
-                <strong>${activeMatch.breakdown.role.score} / 30 (${activeMatch.breakdown.role.pct}%)</strong>
+                <span>Experience Match (15 pts)</span>
+                <strong>${activeMatch.breakdown.experience ? activeMatch.breakdown.experience.score : 0} / 15 (${activeMatch.breakdown.experience ? activeMatch.breakdown.experience.pct : 0}%)</strong>
+              </div>
+              <div class="jc-breakdown-row" style="margin-bottom:0; padding:6px 10px; font-size:13px;">
+                <span>Role Match (25 pts)</span>
+                <strong>${activeMatch.breakdown.role.score} / 25 (${activeMatch.breakdown.role.pct}%)</strong>
               </div>
               <div class="jc-breakdown-row" style="margin-bottom:0; padding:6px 10px; font-size:13px;">
                 <span>Location Match (15 pts)</span>
@@ -1102,7 +1310,7 @@ function renderExpandedCard(force = false) {
       }
       
       bodyHtml = `
-        <div class="jc-body" style="max-height: 380px; gap: 12px; background: #0f172a; padding-top: 10px;">
+        <div class="jc-body" style="gap: 12px; background: #0f172a; padding-top: 10px;">
           <div class="jc-insights-title">Career Insights: ${activeJobDetails.title}</div>
           ${strengthsHtml}
           ${gapsHtml}
@@ -1132,7 +1340,7 @@ function renderExpandedCard(force = false) {
       `;
     } else {
       bodyHtml = `
-        <div class="jc-body" style="max-height: 380px; gap: 16px; background: #0f172a; padding-top: 10px;">
+        <div class="jc-body" style="gap: 16px; background: #0f172a; padding-top: 10px;">
           <div class="jc-insights-title">Market Insights Dashboard</div>
           <!-- Overview Card -->
           <div class="jc-insights-card" style="border-left: 3px solid #0ea5e9; background: rgba(14, 165, 233, 0.04); margin-bottom: 16px;">
@@ -1380,7 +1588,7 @@ function renderExpandedCard(force = false) {
           </select>
         </div>
       </div>
-      <div class="jc-body" style="max-height:380px;">
+      <div class="jc-body">
         ${listItemsHtml}
       </div>
     `;
@@ -1428,7 +1636,7 @@ function renderExpandedCard(force = false) {
         <span>Application Autofill Form</span>
         <span style="color:#cbd5e1;">${detectedFields.length} fields detected</span>
       </div>
-      <div class="jc-body" style="max-height:380px;">
+      <div class="jc-body">
         ${fieldsHtml}
       </div>
     `;
@@ -1449,41 +1657,111 @@ function renderExpandedCard(force = false) {
     const activeDetails = activeAdapter && activeAdapter.scrapeActiveJobDetails ? activeAdapter.scrapeActiveJobDetails() : null;
     const pageType = activeAdapter && activeAdapter.detectPageType ? activeAdapter.detectPageType() : (activeAdapter ? 'details' : 'none');
     
+    let baseDebugRows = `
+      <div class="jc-debug-row"><span>URL:</span><span class="jc-debug-val" style="font-size:11px; max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${window.location.href}">${window.location.href}</span></div>
+      <div class="jc-debug-row"><span>Adapter Active:</span><span class="jc-debug-val">${!!activeAdapter}</span></div>
+      <div class="jc-debug-row"><span>Page Type:</span><span class="jc-debug-val" style="text-transform:uppercase;">${pageType}</span></div>
+      <div class="jc-debug-row"><span>Job Cards Found:</span><span class="jc-debug-val">${cardsCount}</span></div>
+      <div class="jc-debug-row"><span>Description Pane:</span><span class="jc-debug-val">${activeDetails ? 'FOUND' : 'MISSING'}</span></div>
+      <div class="jc-debug-row"><span>Match Engine Active:</span><span class="jc-debug-val">${isMatchMode}</span></div>
+    `;
+
+    let matchEngineDebugRows = '';
+    const activeMatch = activeJobDetails && !activeJobDetails.isLoading ? jobMatchCache.get(activeJobDetails.jobId) : null;
+    if (activeMatch && activeMatch.debug) {
+      const dbg = activeMatch.debug;
+      
+      let reasonsHtml = '';
+      if (Object.keys(dbg.missingReasons || {}).length > 0) {
+        reasonsHtml = Object.entries(dbg.missingReasons).map(([s, reason]) => `
+          <div style="font-size:11px; color:#f87171; border-left:2px solid #ef4444; padding-left:6px; margin-bottom:4px; line-height:1.3; text-align:left;">
+            <strong>${s.toUpperCase()}:</strong> ${reason}
+          </div>
+        `).join('');
+      } else {
+        reasonsHtml = '<div style="font-size:11px; color:#64748b; font-style:italic; text-align:left;">None</div>';
+      }
+
+      matchEngineDebugRows = `
+        <div style="margin-top:10px; border-top:1px solid #334155; padding-top:10px; text-align:left;">
+          <div style="font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:6px;">Match Engine Diagnostics</div>
+          
+          <div class="jc-debug-row" style="flex-direction:row; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:11px; text-align:left;">
+            <span style="font-weight:600; color:#94a3b8;">Required Experience:</span>
+            <span class="jc-debug-val" style="color:#38bdf8;">${activeMatch.requiredExperience} yrs (You: ${activeMatch.candidateExperience} yrs)</span>
+          </div>
+          
+          <div class="jc-debug-row" style="flex-direction:column; align-items:flex-start; gap:2px; margin-bottom:6px; font-size:11px;">
+            <span style="font-weight:600; color:#94a3b8;">Raw Resume Skills:</span>
+            <span class="jc-debug-val" style="word-break:break-all; white-space:normal; line-height:1.2; text-align:left; display:block;">${dbg.rawResumeSkills.join(', ') || 'None'}</span>
+          </div>
+          
+          <div class="jc-debug-row" style="flex-direction:column; align-items:flex-start; gap:2px; margin-bottom:6px; font-size:11px;">
+            <span style="font-weight:600; color:#94a3b8;">Normalized Resume Skills:</span>
+            <span class="jc-debug-val" style="word-break:break-all; white-space:normal; line-height:1.2; color:#2dd4bf; text-align:left; display:block;">${dbg.normalizedResumeSkills.join(', ') || 'None'}</span>
+          </div>
+          
+          <div class="jc-debug-row" style="flex-direction:column; align-items:flex-start; gap:2px; margin-bottom:6px; font-size:11px;">
+            <span style="font-weight:600; color:#94a3b8;">Raw Job Skills (Explicit + Inferred):</span>
+            <span class="jc-debug-val" style="word-break:break-all; white-space:normal; line-height:1.2; text-align:left; display:block;">${dbg.rawJobSkills.join(', ') || 'None'}</span>
+          </div>
+          
+          <div class="jc-debug-row" style="flex-direction:column; align-items:flex-start; gap:2px; margin-bottom:6px; font-size:11px;">
+            <span style="font-weight:600; color:#94a3b8;">Normalized Job Skills:</span>
+            <span class="jc-debug-val" style="word-break:break-all; white-space:normal; line-height:1.2; color:#2dd4bf; text-align:left; display:block;">${dbg.normalizedJobSkills.join(', ') || 'None'}</span>
+          </div>
+          
+          <div style="margin-top:8px;">
+            <div style="font-size:11px; font-weight:600; color:#f87171; margin-bottom:4px;">Missing Skills Reasons:</div>
+            ${reasonsHtml}
+          </div>
+        </div>
+      `;
+    }
+    
     debugHtml = `
-      <div class="jc-debug-info-panel">
-        <div class="jc-debug-row"><span>URL:</span><span class="jc-debug-val" style="font-size:0.55rem; max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${window.location.href}">${window.location.href}</span></div>
-        <div class="jc-debug-row"><span>Adapter Active:</span><span class="jc-debug-val">${!!activeAdapter}</span></div>
-        <div class="jc-debug-row"><span>Page Type:</span><span class="jc-debug-val" style="text-transform:uppercase;">${pageType}</span></div>
-        <div class="jc-debug-row"><span>Job Cards Found:</span><span class="jc-debug-val">${cardsCount}</span></div>
-        <div class="jc-debug-row"><span>Description Pane:</span><span class="jc-debug-val">${activeDetails ? 'FOUND' : 'MISSING'}</span></div>
-        <div class="jc-debug-row"><span>Match Engine Active:</span><span class="jc-debug-val">${isMatchMode}</span></div>
+      <div class="jc-debug-info-panel" style="max-height:220px; overflow-y:auto; padding:10px 12px; background:#0b0f19; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
+        ${baseDebugRows}
+        ${matchEngineDebugRows}
       </div>
     `;
   }
 
-  shadowRoot.innerHTML = `
-    <link rel="stylesheet" href="${chrome.runtime.getURL('content/content.css')}">
-    <div class="jc-card jc-visible">
-      <div class="jc-header">
-        <div class="jc-header-title">
-          <div class="jc-header-logo">JC</div>
-          <h4>JobCopilot HUD</h4>
-        </div>
-        <button class="jc-btn-close" id="jc-close-btn" title="Minimize">
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-          </svg>
-        </button>
+  ensureStylesheet();
+
+  // Remove minimized badge if rendering expanded card
+  const oldBadge = shadowRoot.querySelector('.jc-minimized-badge');
+  if (oldBadge) oldBadge.remove();
+
+  let card = shadowRoot.querySelector('.jc-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'jc-card jc-visible';
+    shadowRoot.appendChild(card);
+  }
+
+  card.innerHTML = `
+    <div class="jc-header">
+      <div class="jc-header-title">
+        <div class="jc-header-logo">JC</div>
+        <h4>JobCopilot HUD</h4>
       </div>
-      ${tabsHtml}
+      <button class="jc-btn-close" id="jc-close-btn" title="Minimize">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+      </button>
+    </div>
+    ${tabsHtml}
+    <div class="jc-tab-content">
       ${bodyHtml}
-      ${debugHtml}
-      <div class="jc-footer" style="display: flex; flex-direction: column; gap: 8px;">
-        ${footerHtml}
-        <button id="jc-toggle-debug" style="background:transparent; border:none; color:#64748b; font-size:0.65rem; cursor:pointer; text-decoration:underline; width:100%; text-align:center; margin-top:2px;">
-          ${showDebugInfo ? 'Hide Diagnostic Info' : 'Show Diagnostic Info'}
-        </button>
-      </div>
+    </div>
+    ${debugHtml}
+    <div class="jc-footer" style="display: flex; flex-direction: column; gap: 8px;">
+      ${footerHtml}
+      <button id="jc-toggle-debug" style="background:transparent; border:none; color:#64748b; font-size:0.65rem; cursor:pointer; text-decoration:underline; width:100%; text-align:center; margin-top:2px;">
+        ${showDebugInfo ? 'Hide Diagnostic Info' : 'Show Diagnostic Info'}
+      </button>
     </div>
   `;
 
@@ -1492,6 +1770,7 @@ function renderExpandedCard(force = false) {
   const minimizeBotBtn = shadowRoot.querySelector('#jc-btn-minimize-bot');
   const fillBtn = shadowRoot.querySelector('#jc-btn-fill-bot');
   const toggleDebugBtn = shadowRoot.querySelector('#jc-toggle-debug');
+  const applyBtn = shadowRoot.querySelector('.jc-apply-btn');
   
   const collapse = () => {
     isExpanded = false;
@@ -1501,6 +1780,14 @@ function renderExpandedCard(force = false) {
 
   if (closeBtn) closeBtn.addEventListener('click', collapse);
   if (minimizeBotBtn) minimizeBotBtn.addEventListener('click', collapse);
+  if (applyBtn) {
+    applyBtn.addEventListener('click', () => {
+      const url = applyBtn.getAttribute('data-url');
+      if (url) {
+        window.location.href = url;
+      }
+    });
+  }
   
   if (fillBtn) {
     fillBtn.addEventListener('click', () => {
@@ -1571,6 +1858,54 @@ function renderExpandedCard(force = false) {
       item.addEventListener('click', () => {
         const jobId = item.getAttribute('data-job-id');
         
+        // Check for redirect platforms like Unstop
+        const isUnstop = window.location.hostname.toLowerCase().includes('unstop.com');
+        if (isUnstop) {
+          const cachedJob = detectedJobs.find(j => j.jobId === jobId);
+          if (cachedJob) {
+            // Highlight the card on the page if it exists
+            const cardElement = cachedJob.element;
+            if (cardElement && document.body.contains(cardElement)) {
+              const prevActive = document.querySelector('[data-jc-active="true"]');
+              if (prevActive) {
+                prevActive.removeAttribute('data-jc-active');
+                prevActive.style.outline = '';
+                prevActive.style.boxShadow = '';
+              }
+              cardElement.setAttribute('data-jc-active', 'true');
+              cardElement.style.outline = '2px solid #0d9488';
+              cardElement.style.boxShadow = '0 0 12px rgba(13, 148, 136, 0.3)';
+              
+              if (typeof cardElement.scrollIntoView === 'function') {
+                cardElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              }
+            }
+
+            activeJobDetails = {
+              jobId: jobId,
+              title: cachedJob.title,
+              company: cachedJob.company,
+              locationText: cachedJob.locationText,
+              description: '',
+              isEstimatedPreview: true,
+              opportunityUrl: cachedJob.opportunityUrl || `https://unstop.com/opportunities/${jobId}`
+            };
+            
+            const match = window.JobCopilotMatchEngine.calculateFullMatch(activeJobDetails, userProfile);
+            match.isEstimated = false;
+            match.jobId = jobId;
+            match.title = cachedJob.title;
+            match.company = cachedJob.company;
+            match.locationText = cachedJob.locationText;
+            match.descriptionLength = 0;
+            jobMatchCache.set(jobId, match);
+            
+            activeTab = 'active';
+            renderExpandedCard();
+            return;
+          }
+        }
+        
         // 1. Try to find the element live in the page DOM using the jobId
         let liveCard = document.querySelector(`li[data-occludable-job-id="${jobId}"], [data-job-id="${jobId}"], [data-jk="${jobId}"]`);
         
@@ -1636,9 +1971,9 @@ function renderExpandedCard(force = false) {
   }
 
   // Restore scroll position
-  const newBodyEl = shadowRoot.querySelector('.jc-body');
-  if (newBodyEl) {
-    newBodyEl.scrollTop = scrollTop;
+  const newTabContentEl = shadowRoot.querySelector('.jc-tab-content');
+  if (newTabContentEl) {
+    newTabContentEl.scrollTop = scrollTop;
   }
 }
 
