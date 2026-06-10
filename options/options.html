@@ -128,6 +128,24 @@
               </select>
             </div>
           </div>
+
+          <h3>AI Intelligence Layer (Gemini)</h3>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="geminiApiKey">Gemini API Key (Google AI Studio)</label>
+              <input type="password" id="geminiApiKey" placeholder="AIzaSy..." />
+              <p class="field-help" style="font-size:12px; color:#64748b; margin-top:4px; font-weight:normal;">
+                Get a free API key from <a href="https://aistudio.google.com/" target="_blank" style="color:#2dd4bf; text-decoration:underline;">Google AI Studio</a>. Leave empty to use rule-based matching only.
+              </p>
+            </div>
+            <div class="form-group">
+              <label for="aiThreshold">AI Fallback Threshold: <span id="threshold-val">50</span>%</label>
+              <input type="range" id="aiThreshold" min="10" max="90" step="5" value="50" style="width: 100%;" />
+              <p class="field-help" style="font-size:12px; color:#64748b; margin-top:4px; font-weight:normal;">
+                Triggers AI when rule-based parser confidence falls below this percentage.
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Raw Text / Status Section -->

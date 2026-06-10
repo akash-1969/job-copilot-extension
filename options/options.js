@@ -24,6 +24,8 @@ const formFields = {
   experienceYears: document.getElementById('experienceYears'),
   preferredLocation: document.getElementById('preferredLocation'),
   remotePreference: document.getElementById('remotePreference'),
+  geminiApiKey: document.getElementById('geminiApiKey'),
+  aiThreshold: document.getElementById('aiThreshold'),
   rawResumeText: document.getElementById('rawResumeText')
 };
 
@@ -57,6 +59,15 @@ async function loadKBForOptions() {
 document.addEventListener('DOMContentLoaded', async () => {
   await loadKBForOptions();
   loadProfile();
+  
+  // Bind range slider update listener
+  const thresholdVal = document.getElementById('threshold-val');
+  const aiThreshold = document.getElementById('aiThreshold');
+  if (aiThreshold && thresholdVal) {
+    aiThreshold.addEventListener('input', (e) => {
+      thresholdVal.innerText = e.target.value;
+    });
+  }
 });
 
 // Save Profile button listener
@@ -94,9 +105,13 @@ function loadProfile() {
           if (key === 'rawResumeText') {
             formFields[key].value = result.rawResumeText || '';
           } else {
-            formFields[key].value = (result.profile[key] !== undefined && result.profile[key] !== null) ? result.profile[key] : (key === 'remotePreference' ? 'open' : '');
+            formFields[key].value = (result.profile[key] !== undefined && result.profile[key] !== null) ? result.profile[key] : (key === 'remotePreference' ? 'open' : (key === 'aiThreshold' ? 50 : ''));
           }
         });
+        const thresholdVal = document.getElementById('threshold-val');
+        if (thresholdVal && result.profile.aiThreshold) {
+          thresholdVal.innerText = result.profile.aiThreshold;
+        }
       }
     });
   } else {
@@ -119,7 +134,9 @@ function saveProfile() {
     targetRoles: formFields.targetRoles.value.trim(),
     experienceYears: parseInt(formFields.experienceYears.value, 10) || 0,
     preferredLocation: formFields.preferredLocation.value.trim(),
-    remotePreference: formFields.remotePreference.value
+    remotePreference: formFields.remotePreference.value,
+    geminiApiKey: formFields.geminiApiKey.value.trim(),
+    aiThreshold: parseInt(formFields.aiThreshold.value, 10) || 50
   };
   const rawResumeText = formFields.rawResumeText.value;
 

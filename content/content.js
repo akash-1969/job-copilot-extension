@@ -180,6 +180,75 @@ const observer = new MutationObserver(() => {
   }, 1000);
 });
 
+// Async helper to evaluate active job and trigger Gemini fallback if needed
+function evaluateActiveJob(activeDetails) {
+  if (!activeDetails) return;
+  activeJobDetails = activeDetails;
+  let cached = jobMatchCache.get(activeDetails.jobId);
+  
+  if (!cached || cached.isEstimated || cached.descriptionLength !== activeDetails.description.length) {
+    const fullMatch = window.JobCopilotMatchEngine.calculateFullMatch(activeDetails, userProfile);
+    fullMatch.isEstimated = false;
+    fullMatch.jobId = activeDetails.jobId;
+    fullMatch.title = activeDetails.title;
+    fullMatch.company = activeDetails.company;
+    fullMatch.locationText = activeDetails.locationText;
+    fullMatch.descriptionLength = activeDetails.description.length;
+    
+    jobMatchCache.set(activeDetails.jobId, fullMatch);
+    cached = fullMatch;
+  }
+  
+  // Trigger Gemini AI Fallback only if confidence is low, API key is available, description is valid, and AI isn't already running/completed
+  const hasDesc = activeDetails.description && activeDetails.description.length > 200;
+  if (cached && cached.aiTriggered && userProfile.geminiApiKey && hasDesc && !cached.aiRunning && !cached.aiCompleted) {
+    cached.aiRunning = true;
+    console.log(`[JobCopilot AI] Low-confidence match detected (Score: ${cached.score}%, Confidence: ${cached.confidence}%). Requesting Gemini API parsing...`);
+    
+    // Temporarily trigger AI loading spinner in UI
+    activeJobDetails = {
+      ...activeDetails,
+      isAiLoading: true
+    };
+    renderWidget();
+    
+    window.fetchGeminiAnalysis(activeDetails, userProfile.geminiApiKey)
+      .then(aiAnalysis => {
+        console.log(`[JobCopilot AI] Gemini response successfully retrieved. Re-matching...`);
+        const aiMatch = window.JobCopilotMatchEngine.calculateFullMatch(activeDetails, userProfile, aiAnalysis);
+        aiMatch.isEstimated = false;
+        aiMatch.jobId = activeDetails.jobId;
+        aiMatch.title = activeDetails.title;
+        aiMatch.company = activeDetails.company;
+        aiMatch.locationText = activeDetails.locationText;
+        aiMatch.descriptionLength = activeDetails.description.length;
+        aiMatch.aiCompleted = true;
+        aiMatch.aiRunning = false;
+        
+        jobMatchCache.set(activeDetails.jobId, aiMatch);
+        
+        // Re-render UI with new match
+        if (activeJobDetails && activeJobDetails.jobId === activeDetails.jobId) {
+          activeJobDetails = activeDetails;
+          renderWidget();
+        }
+      })
+      .catch(err => {
+        console.error(`[JobCopilot AI] Gemini parsing failed. Using rule-based fallback.`, err);
+        cached.aiRunning = false;
+        cached.aiCompleted = true;
+        cached.aiFailed = true;
+        cached.aiFailureReason = err.message;
+        
+        // Restore active state and render failure warning
+        if (activeJobDetails && activeJobDetails.jobId === activeDetails.jobId) {
+          activeJobDetails = activeDetails;
+          renderWidget();
+        }
+      });
+  }
+}
+
 // Run Init
 async function initJobCopilot() {
   userProfile = await getStoredProfile();
@@ -190,6 +259,11 @@ async function initJobCopilot() {
 
   // Load the local knowledge base databases
   await loadKnowledgeBase();
+
+  // Sync AI fallback threshold with understanding layer
+  if (window.JobUnderstandingLayer) {
+    window.JobUnderstandingLayer.aiThreshold = userProfile.aiThreshold !== undefined ? userProfile.aiThreshold : 50;
+  }
 
   // Detect if matching applies (Multi-site check)
   const activeAdapter = window.SiteAdapter ? window.SiteAdapter.getAdapter() : null;
@@ -254,14 +328,7 @@ async function initJobCopilot() {
             opportunityUrl: job.opportunityUrl || `https://unstop.com/opportunities/${job.jobId}`
           };
           
-          const match = window.JobCopilotMatchEngine.calculateFullMatch(activeJobDetails, userProfile);
-          match.isEstimated = false;
-          match.jobId = job.jobId;
-          match.title = job.title;
-          match.company = job.company;
-          match.locationText = job.locationText;
-          match.descriptionLength = 0;
-          jobMatchCache.set(job.jobId, match);
+          evaluateActiveJob(activeJobDetails);
           
           activeTab = 'active';
           isExpanded = true;
@@ -415,21 +482,7 @@ function runPageAnalysis() {
 
     // Process active job matching
     if (activeDetails && !detailsAreOutdated) {
-      activeJobDetails = activeDetails;
-      const cached = jobMatchCache.get(activeDetails.jobId);
-      
-      if (!cached || cached.isEstimated || cached.descriptionLength !== activeDetails.description.length) {
-        // Run full match engine on newly active job
-        const fullMatch = window.JobCopilotMatchEngine.calculateFullMatch(activeDetails, userProfile);
-        fullMatch.isEstimated = false;
-        fullMatch.jobId = activeDetails.jobId;
-        fullMatch.title = activeDetails.title;
-        fullMatch.company = activeDetails.company;
-        fullMatch.locationText = activeDetails.locationText;
-        fullMatch.descriptionLength = activeDetails.description.length;
-        
-        jobMatchCache.set(activeDetails.jobId, fullMatch);
-      }
+      evaluateActiveJob(activeDetails);
     } else if (detailsAreOutdated || (activeCardTitle && !activeDetails)) {
       // Set loading state placeholder to prevent showing outdated details
       activeJobDetails = {
@@ -969,14 +1022,15 @@ function renderExpandedCard(force = false) {
   
   if (activeTab === 'active' && isMatchMode) {
     // ACTIVE JOB DETAILS VIEW
-    const activeMatch = activeJobDetails && !activeJobDetails.isLoading ? jobMatchCache.get(activeJobDetails.jobId) : null;
+    const activeMatch = activeJobDetails && !activeJobDetails.isLoading && !activeJobDetails.isAiLoading ? jobMatchCache.get(activeJobDetails.jobId) : null;
     
-    if (activeJobDetails && activeJobDetails.isLoading) {
+    if (activeJobDetails && (activeJobDetails.isLoading || activeJobDetails.isAiLoading)) {
+      const loadingMsg = activeJobDetails.isAiLoading ? "Consulting Gemini AI for deep analysis..." : "Analyzing job requirements...";
       bodyHtml = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 20px; gap: 16px; color:#cbd5e1; text-align:center; min-height:220px;">
-          <div class="jc-loading-spinner"></div>
+          <div class="jc-loading-spinner" style="border-color:#38bdf8 !important;"></div>
           <div style="font-size: 1.1rem; font-weight:700; color:#f1f5f9; margin-top: 10px;">${activeJobDetails.title}</div>
-          <div style="font-size: 0.85rem; color:#94a3b8; font-style:italic;">Analyzing job requirements...</div>
+          <div style="font-size: 0.85rem; color:#38bdf8; font-style:italic; font-weight:600; letter-spacing:0.02em;">${loadingMsg}</div>
         </div>
       `;
     } else if (activeMatch) {
@@ -1019,14 +1073,33 @@ function renderExpandedCard(force = false) {
       `;
 
       let aiAlertHtml = '';
-      if (activeMatch.aiTriggered) {
+      if (activeMatch.aiTriggered && userProfile.geminiApiKey && !activeMatch.aiCompleted) {
+        aiAlertHtml = `
+          <div class="jc-hud-ai-alert" style="background:rgba(56, 189, 248, 0.05); border-left:3px solid #38bdf8; border-color: rgba(56, 189, 248, 0.25);">
+            <div class="jc-loading-spinner" style="width:14px; height:14px; border-width:2px; display:inline-block; vertical-align:middle; margin-right:6px; border-color:#38bdf8 !important;"></div>
+            <strong style="color:#38bdf8;">Gemini AI:</strong> Analysing details in background...
+          </div>
+        `;
+      } else if (activeMatch.aiFailed) {
+        aiAlertHtml = `
+          <div class="jc-hud-ai-alert" style="background:rgba(239, 68, 68, 0.05); border-left:3px solid #ef4444; border-color: rgba(239, 68, 68, 0.25); color:#f87171;">
+            <strong style="color:#ef4444;">Gemini AI failed:</strong> ${activeMatch.aiFailureReason || "Unknown error"}. Using local fallback.
+          </div>
+        `;
+      } else if (activeMatch.providerUsed === 'ai') {
+        aiAlertHtml = `
+          <div class="jc-hud-ai-alert" style="background:rgba(16, 185, 129, 0.05); border-left:3px solid #10b981; border-color: rgba(16, 185, 129, 0.25); color:#a7f3d0;">
+            <strong style="color:#10b981;">Gemini AI Match Active:</strong> Successfully parsed experience and skills.
+          </div>
+        `;
+      } else if (activeMatch.aiTriggered && !userProfile.geminiApiKey) {
         aiAlertHtml = `
           <div class="jc-hud-ai-alert">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
             </svg>
             <div>
-              <strong>AI recommendation:</strong> Analysis confidence is low (${confidence}%). Deep AI parsing is recommended to evaluate responsibilities.
+              <strong>AI Recommended:</strong> Low-confidence match (${confidence}%). Set up a free Gemini API key in Options for deep parsing.
             </div>
           </div>
         `;
