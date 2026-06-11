@@ -946,6 +946,142 @@ function getMarketInsights() {
   return marketInsightsCache;
 }
 
+let currentHighlights = [];
+
+function clearHighlights() {
+  currentHighlights.forEach(el => {
+    if (el && el.parentNode) {
+      const parent = el.parentNode;
+      const textNode = document.createTextNode(el.textContent);
+      parent.replaceChild(textNode, el);
+      parent.normalize();
+    }
+  });
+  currentHighlights = [];
+}
+
+function getSynonymsForSkill(normalizedSkill) {
+  const norm = normalizedSkill.toLowerCase().trim();
+  const list = [normalizedSkill];
+  
+  if (window.JOB_COPILOT_SYNONYMS) {
+    Object.entries(window.JOB_COPILOT_SYNONYMS).forEach(([raw, canonical]) => {
+      if (canonical.toLowerCase() === norm) {
+        list.push(raw);
+      }
+    });
+  }
+  
+  return [...new Set(list)].sort((a, b) => b.length - a.length);
+}
+
+function getDescriptionElement() {
+  const selectors = [
+    '#job-details', '.jobs-description__content', '.jobs-description-content__text',
+    '#jobDescriptionText', '.jobsearch-jobDescriptionText',
+    'div[id*="job-description"]',
+    '.posting-description', '.posting-requirements',
+    '.job-description', '.opportunity-description', '.opportunity-details-container',
+    '#job-description', '.job-description', '.posting-description', '.jobdesc'
+  ];
+  
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el && el.offsetHeight > 0) return el;
+  }
+  
+  return document.querySelector('article, main') || document.body;
+}
+
+function highlightText(container, keyword) {
+  clearHighlights();
+  if (!container || !keyword) return;
+
+  const normalizedKeyword = keyword.toLowerCase().trim();
+  if (normalizedKeyword.length === 0) return;
+
+  const synonymsList = getSynonymsForSkill(normalizedKeyword);
+  const escapedTerms = synonymsList.map(term => {
+    const escaped = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const startBoundary = /^[a-zA-Z0-9_]/.test(term) ? '\\b' : '';
+    const endBoundary = /[a-zA-Z0-9_]$/.test(term) ? '\\b' : '';
+    return startBoundary + escaped + endBoundary;
+  });
+
+  const regex = new RegExp(escapedTerms.join('|'), 'gi');
+
+  const walk = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+  const textNodes = [];
+  let node;
+  while (node = walk.nextNode()) {
+    const parentTag = node.parentElement ? node.parentElement.tagName.toUpperCase() : '';
+    if (parentTag !== 'SCRIPT' && parentTag !== 'STYLE' && parentTag !== 'NOSCRIPT' && parentTag !== 'MARK') {
+      textNodes.push(node);
+    }
+  }
+
+  let firstMatchEl = null;
+
+  textNodes.forEach(textNode => {
+    const parent = textNode.parentNode;
+    if (!parent) return;
+
+    const val = textNode.nodeValue;
+    const matches = [];
+    let match;
+    
+    regex.lastIndex = 0;
+    while ((match = regex.exec(val)) !== null) {
+      matches.push({
+        index: match.index,
+        length: match[0].length,
+        text: match[0]
+      });
+      if (regex.lastIndex === 0) break;
+    }
+
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const m = matches[i];
+      const splitNode = textNode.splitText(m.index);
+      splitNode.nodeValue = splitNode.nodeValue.substring(m.length);
+
+      const mark = document.createElement('mark');
+      mark.className = 'jc-highlight-term';
+      mark.style.backgroundColor = '#10b981';
+      mark.style.color = '#ffffff';
+      mark.style.padding = '2px 4px';
+      mark.style.borderRadius = '3px';
+      mark.style.fontWeight = 'bold';
+      mark.style.transition = 'all 0.3s ease';
+      mark.textContent = m.text;
+
+      parent.insertBefore(mark, splitNode);
+      currentHighlights.push(mark);
+      if (!firstMatchEl) {
+        firstMatchEl = mark;
+      }
+    }
+  });
+
+  if (firstMatchEl) {
+    firstMatchEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    firstMatchEl.style.transform = 'scale(1.1)';
+    firstMatchEl.style.boxShadow = '0 0 10px #10b981';
+    setTimeout(() => {
+      if (firstMatchEl) {
+        firstMatchEl.style.transform = 'scale(1)';
+        firstMatchEl.style.boxShadow = 'none';
+      }
+    }, 1500);
+  }
+}
+
+function highlightTextInJobDescription(skillQuery) {
+  const container = getDescriptionElement();
+  if (!container) return;
+  highlightText(container, skillQuery);
+}
+
 // Render Expanded HUD Dashboard view
 function renderExpandedCard(force = false) {
   // Check if sort dropdown is active to avoid closing it
@@ -1041,7 +1177,7 @@ function renderExpandedCard(force = false) {
       const makeTag = (skill, isMatched) => {
         const cls = isMatched ? 'jc-skill-tag jc-skill-matched' : 'jc-skill-tag jc-skill-missing';
         const display = getSkillDisplay(skill);
-        return `<span class="${cls}">${display}</span>`;
+        return `<span class="${cls}" data-skill="${skill}">${display}</span>`;
       };
 
       const explicitMatchedTags = (activeMatch.explicitMatched || activeMatch.matchedSkills || []).length > 0
@@ -1113,7 +1249,7 @@ function renderExpandedCard(force = false) {
       if (activeJobDetails && activeJobDetails.isEstimatedPreview) {
         applyBtnHtml = `
           <div style="margin: 12px 0 4px 0; width: 100%; display: flex; justify-content: center;">
-            <button class="jc-btn jc-btn-fill jc-apply-btn" data-url="${activeJobDetails.opportunityUrl || ''}" style="width: 100%; padding: 10px; font-weight: 700; background: linear-gradient(135deg, #0d9488, #0ea5e9); border: none; border-radius: 8px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+            <button class="jc-btn jc-btn-fill jc-apply-btn" data-url="${activeJobDetails.opportunityUrl || ''}">
               <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
@@ -1125,7 +1261,7 @@ function renderExpandedCard(force = false) {
 
       bodyHtml = `
         <div class="jc-score-header">
-          <div class="jc-score-circle ${levelClass}">${activeMatch.score}%</div>
+          <div class="jc-score-flat-box ${levelClass}">${activeMatch.score}% Match</div>
           <div class="jc-score-title">${activeMatch.title}</div>
           <div class="jc-score-subtitle">${activeMatch.company}</div>
           ${metaBadgesHtml}
@@ -1134,29 +1270,29 @@ function renderExpandedCard(force = false) {
         ${aiAlertHtml}
         <div class="jc-body" style="gap:14px;">
           <!-- Experience info bar -->
-          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(30, 41, 59, 0.4); border:1px solid rgba(255,255,255,0.06); padding:8px 12px; border-radius:10px; font-size:13px; margin-top:2px;">
-            <span style="color:#94a3b8; display:flex; align-items:center; gap:6px;">
-              <svg style="width:14px; height:14px; color:#38bdf8;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a1a; border:1px solid #282828; padding:8px 12px; border-radius:6px; font-size:13px; margin-top:2px;">
+            <span style="color:#cbd5e1; display:flex; align-items:center; gap:6px;">
+              <svg style="width:14px; height:14px; color:#10b981;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               Required Experience:
             </span>
             <strong>
               ${activeMatch.requiredExperience} yrs 
-              <span style="font-weight:normal; color:#64748b; margin-left:4px; margin-right:4px;">vs</span> 
+              <span style="font-weight:normal; color:#8e8e8e; margin-left:4px; margin-right:4px;">vs</span> 
               You: ${activeMatch.candidateExperience} yrs
             </strong>
           </div>
 
           <!-- Bullet Insights Grid (Why this match vs Missing) -->
           <div class="jc-insights-dashboard-grid">
-            <div class="jc-insights-card" style="margin-bottom:0; background:rgba(30, 41, 59, 0.2); border-left:3px solid #0d9488; padding:12px 14px;">
-              <div class="jc-skills-column-header" style="border-bottom:none; margin-bottom:10px; color:#2dd4bf;">Why This Match?</div>
+            <div class="jc-insights-card" style="margin-bottom:0; background:#1a1a1a; border:1px solid #282828; border-left:3px solid #10b981; padding:12px 14px;">
+              <div class="jc-skills-column-header" style="border-bottom:none; margin-bottom:10px; color:#10b981;">Why This Match?</div>
               <ul class="jc-bullets-list">
                 ${matchedBulletsHtml || '<li style="color:#64748b; font-style:italic;">None</li>'}
               </ul>
             </div>
-            <div class="jc-insights-card" style="margin-bottom:0; background:rgba(248, 113, 113, 0.02); border-left:3px solid #f87171; padding:12px 14px;">
+            <div class="jc-insights-card" style="margin-bottom:0; background:#1a1a1a; border:1px solid #282828; border-left:3px solid #f87171; padding:12px 14px;">
               <div class="jc-skills-column-header" style="border-bottom:none; margin-bottom:10px; color:#f87171;">Missing</div>
               <ul class="jc-bullets-list">
                 ${missingBulletsHtml || '<li style="color:#64748b; font-style:italic;">None</li>'}
@@ -1261,7 +1397,7 @@ function renderExpandedCard(force = false) {
           const countStr = item.count > 0 ? ` (${item.count}x)` : '';
           const isExplicit = item.type === 'explicit';
           const badgeClass = isExplicit ? 'jc-skill-tag jc-skill-matched' : 'jc-skill-tag jc-skill-matched';
-          return `<span class="${badgeClass}">${item.skill.toUpperCase()}${countStr}</span>`;
+          return `<span class="${badgeClass}" data-skill="${item.skill}">${item.skill.toUpperCase()}${countStr}</span>`;
         }).join('');
         strengthsHtml = `
           <div class="jc-insights-card">
@@ -1382,7 +1518,7 @@ function renderExpandedCard(force = false) {
       }
       
       bodyHtml = `
-        <div class="jc-body" style="gap: 12px; background: #0f172a; padding-top: 10px;">
+        <div class="jc-body" style="gap: 12px; background: #121212; padding-top: 10px;">
           <div class="jc-insights-title">Career Insights: ${activeJobDetails.title}</div>
           ${strengthsHtml}
           ${gapsHtml}
@@ -1412,10 +1548,10 @@ function renderExpandedCard(force = false) {
       `;
     } else {
       bodyHtml = `
-        <div class="jc-body" style="gap: 16px; background: #0f172a; padding-top: 10px;">
+        <div class="jc-body" style="gap: 16px; background: #121212; padding-top: 10px;">
           <div class="jc-insights-title">Market Insights Dashboard</div>
           <!-- Overview Card -->
-          <div class="jc-insights-card" style="border-left: 3px solid #0ea5e9; background: rgba(14, 165, 233, 0.04); margin-bottom: 16px;">
+          <div class="jc-insights-card" style="border: 1px solid #282828; border-left: 3px solid #60a5fa; background: #1a1a1a; margin-bottom: 16px;">
             <div class="jc-insights-card-title">Market Overview</div>
             <div style="font-size: 0.95rem; line-height: 1.6; color: #cbd5e1;">${insights.summary}</div>
           </div>
@@ -1504,15 +1640,15 @@ function renderExpandedCard(force = false) {
             <div style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; letter-spacing:0.02em;">You Have (In Demand)</div>
             <div class="jc-skills-group" style="padding-bottom: 12px;">
               ${insights.youHave.length > 0 
-                ? insights.youHave.map(s => `<span class="jc-skill-tag jc-skill-matched" style="font-size:0.85rem; padding: 4px 10px;">${s.toUpperCase()}</span>`).join('') 
+                ? insights.youHave.map(s => `<span class="jc-skill-tag jc-skill-matched" data-skill="${s}" style="font-size:0.85rem; padding: 4px 10px;">${s.toUpperCase()}</span>`).join('') 
                 : '<span style="font-size:0.9rem; color:#64748b; font-style:italic;">None detected</span>'}
             </div>
 
             <div style="font-size: 0.85rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; letter-spacing:0.02em;">High Demand Skills Missing</div>
             <div class="jc-skills-group" style="padding-bottom: 4px;">
               ${insights.missingSkills.length > 0 
-                ? insights.missingSkills.slice(0, 5).map(s => `<span class="jc-skill-tag jc-skill-missing" style="font-size:0.85rem; padding: 4px 10px; color:#f87171; border-color:rgba(248,113,113,0.25); background:rgba(248,113,113,0.06);">${s.skill.toUpperCase()} (${s.pct}%)</span>`).join('') 
-                : '<span style="font-size:0.9rem; color:#2dd4bf; font-weight:600;">None! Your profile is fully aligned.</span>'}
+                ? insights.missingSkills.slice(0, 5).map(s => `<span class="jc-skill-tag jc-skill-missing" data-skill="${s.skill}" style="font-size:0.85rem; padding: 4px 10px;">${s.skill.toUpperCase()} (${s.pct}%)</span>`).join('') 
+                : '<span style="font-size:0.9rem; color:#10b981; font-weight:600;">None! Your profile is fully aligned.</span>'}
             </div>
           </div>
           
@@ -1601,9 +1737,9 @@ function renderExpandedCard(force = false) {
               <div class="jc-insights-card-title">Top Locations</div>
               <div style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1; justify-content: center;">
                 ${insights.locations.slice(0, 4).map(l => `
-                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #cbd5e1; padding: 6px 10px; background: #0f172a; border-radius: 4px; border: 1px solid #1e293b;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #cbd5e1; padding: 6px 10px; background: #1a1a1a; border-radius: 4px; border: 1px solid #282828;">
                     <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95px;" title="${l.location}">${l.location}</span>
-                    <span style="font-weight: 700; color: #3b82f6;">${l.count}</span>
+                    <span style="font-weight: 700; color: #60a5fa;">${l.count}</span>
                   </div>
                 `).join('')}
                 ${insights.locations.length === 0 ? '<span style="font-size:0.85rem; color:#64748b; font-style:italic; text-align:center;">None</span>' : ''}
@@ -1704,7 +1840,7 @@ function renderExpandedCard(force = false) {
     }
 
     bodyHtml = `
-      <div style="display:flex; justify-content:space-between; font-size: 0.9rem; color: #94a3b8; background: #1e293b; padding: 8px 16px; border-bottom: 1px solid #334155; font-weight: 500;">
+      <div style="display:flex; justify-content:space-between; font-size: 0.9rem; color: #94a3b8; background: #1a1a1a; padding: 8px 16px; border-bottom: 1px solid #282828; font-weight: 500;">
         <span>Application Autofill Form</span>
         <span style="color:#cbd5e1;">${detectedFields.length} fields detected</span>
       </div>
@@ -1755,12 +1891,12 @@ function renderExpandedCard(force = false) {
       }
 
       matchEngineDebugRows = `
-        <div style="margin-top:10px; border-top:1px solid #334155; padding-top:10px; text-align:left;">
-          <div style="font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:6px;">Match Engine Diagnostics</div>
+        <div style="margin-top:10px; border-top:1px solid #282828; padding-top:10px; text-align:left;">
+          <div style="font-size:12px; font-weight:700; color:#10b981; margin-bottom:6px;">Match Engine Diagnostics</div>
           
           <div class="jc-debug-row" style="flex-direction:row; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:11px; text-align:left;">
             <span style="font-weight:600; color:#94a3b8;">Required Experience:</span>
-            <span class="jc-debug-val" style="color:#38bdf8;">${activeMatch.requiredExperience} yrs (You: ${activeMatch.candidateExperience} yrs)</span>
+            <span class="jc-debug-val" style="color:#10b981;">${activeMatch.requiredExperience} yrs (You: ${activeMatch.candidateExperience} yrs)</span>
           </div>
           
           <div class="jc-debug-row" style="flex-direction:column; align-items:flex-start; gap:2px; margin-bottom:6px; font-size:11px;">
@@ -1792,7 +1928,7 @@ function renderExpandedCard(force = false) {
     }
     
     debugHtml = `
-      <div class="jc-debug-info-panel" style="max-height:220px; overflow-y:auto; padding:10px 12px; background:#0b0f19; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
+      <div class="jc-debug-info-panel" style="max-height:220px; overflow-y:auto; padding:10px 12px; background:#121212; border-top:1px solid #282828; border-bottom:1px solid #282828;">
         ${baseDebugRows}
         ${matchEngineDebugRows}
       </div>
@@ -2038,6 +2174,16 @@ function renderExpandedCard(force = false) {
           renderExpandedCard();
           triggerAnalysisWithRetry();
         }
+      });
+    });
+
+    // 5. Attach click listener to skill tags for Click-to-Highlight
+    const skillTags = shadowRoot.querySelectorAll('.jc-skill-tag');
+    skillTags.forEach(tag => {
+      tag.addEventListener('click', () => {
+        const skillKey = tag.getAttribute('data-skill');
+        const displayName = tag.textContent.trim().replace(/\s*\(\d+x\)$/, '').replace(/\s*\(\d+%\)$/, '');
+        highlightTextInJobDescription(skillKey || displayName);
       });
     });
   }
